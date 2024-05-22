@@ -35,9 +35,7 @@ async fn main() -> Result<()> {
         } => {
             server::server(bind_to, payload_size.0 as usize, packet_size).await?;
         }
-        cli::Command::Client { server } => {
-            client::client_test(&server, packet_size).await?;
-        }
+        cli::Command::Client { server } => client::client_tcp(&server, packet_size).await?,
     }
 
     Ok(())

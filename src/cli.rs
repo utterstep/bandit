@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
-    #[arg(short, long, default_value = "1.5KB")]
+    #[arg(short, long, default_value = "32664")]
     pub packet_size: ByteSize,
 }
 

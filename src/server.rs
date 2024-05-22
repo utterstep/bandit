@@ -1,32 +1,38 @@
-use std::{sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use eyre::{Result, WrapErr};
 use rand::Rng;
 use tokio::{
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
 use tracing::{error, info, warn};
 
-use crate::consts::HANDSHAKE;
+use crate::consts::{header, HANDSHAKE};
 
-#[tracing::instrument]
 pub async fn server(bind_to: String, payload_size: usize, packet_size: usize) -> Result<()> {
     let mut buf = vec![0; payload_size];
-    info!("populating payload buffer with {} bytes", payload_size);
+    info!(
+        payload_size,
+        "populating payload buffer with {} bytes", payload_size
+    );
     let mut rng = rand::thread_rng();
     rng.fill(&mut buf[..]);
     let buf = Arc::from(buf);
+    info!("payload buffer populated");
 
-    let listener = TcpListener::bind(bind_to)
+    let listener = TcpListener::bind(&bind_to)
         .await
         .wrap_err("failed to bind to address")?;
+    info!(binded_to = bind_to, packet_size, "server started listening");
 
     loop {
         let (socket, addr) = listener
             .accept()
             .await
-            .wrap_err("failed to accept connection")?;
+            .wrap_err("failed to accept TCP connection")?;
+
+        info!(%addr, "accepted TCP connection");
 
         tokio::spawn(serve_client(socket, addr, Arc::clone(&buf), packet_size));
     }
@@ -35,7 +41,7 @@ pub async fn server(bind_to: String, payload_size: usize, packet_size: usize) ->
 #[tracing::instrument(skip(socket, buf), err, ret)]
 pub async fn serve_client(
     mut socket: TcpStream,
-    addr: std::net::SocketAddr,
+    addr: SocketAddr,
     buf: Arc<[u8]>,
     packet_size: usize,
 ) -> Result<Duration> {
@@ -46,6 +52,21 @@ pub async fn serve_client(
         .write_all(&HANDSHAKE)
         .await
         .wrap_err("failed to send handshake")?;
+
+    let mut handshake_buf = [0; HANDSHAKE.len()];
+    socket
+        .read_exact(&mut handshake_buf)
+        .await
+        .wrap_err("failed to read handshake")?;
+
+    if handshake_buf != HANDSHAKE {
+        eyre::bail!("client sent incorrect handshake");
+    }
+
+    socket
+        .write_all(&header(buf.len()))
+        .await
+        .wrap_err("failed to send header")?;
 
     let start = std::time::Instant::now();
     loop {
