@@ -49,8 +49,7 @@ pub async fn client_tcp(server: &str, packet_size: usize) -> Result<()> {
 
     let pb = ProgressBar::new(len as u64);
     pb.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}, {speed_mbit})")
-        .unwrap()
-        .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
+        .wrap_err("failed to set progress bar style")?
         .with_key("speed_mbit", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.2} Mbit/s", state.per_sec() * 8.0 / 1024.0 / 1024.0).unwrap())
         .progress_chars("#>-"));
 
@@ -69,6 +68,7 @@ pub async fn client_tcp(server: &str, packet_size: usize) -> Result<()> {
     }
 
     let elapsed = start.elapsed();
+    pb.finish_with_message("Download complete");
 
     info!(
         "client received {} bytes in {} ms",
